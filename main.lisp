@@ -1,3 +1,12 @@
+;; SOME UTILITIES
+
+(defun compose (&rest functions)
+  "Compose FUNCTIONS right-associatively, returning a function"
+  #'(lambda (x)
+      (reduce #'funcall functions
+              :initial-value x
+              :from-end t)))
+
 ;; DECEMBER 2ND - PART 1
 
 (defun int-code-computer (program)
@@ -195,7 +204,80 @@
           (path-b (read input)))
       (minimize-wire-steps path-a path-b))))
 
-(defvar me "david")
+;; DAY 4 - PART 1
 
+(define-condition passwd-is-not-a-string-error (error)
+  ((text :initarg :text :reader text)))
 
+(defun password-ok (passwd)
+  "Return T if the password meets the following criteria:
+    - 6-digit number
+    - 2 adjacent digits are the same
+    - going from left to right, the digits never decrease"
+  (let ((failing-reason :none))
+    (if (stringp passwd)
+        (or (and (progn
+                   (setf failing-reason :6-digit)
+                   (= 6 (length passwd)))
+                 (progn
+                   (setf failing-reason :only-2-in-a-row)
+                   (loop
+                     for last-c = nil then c
+                     for had-two-adjacents-once = nil
+                       then had-two-adjacents-once
+
+                     for c across passwd
+                     for i to (length passwd)
+
+                     for cnt-in-a-row = 1
+                       then (if (eql last-c c)
+                                (1+ cnt-in-a-row)
+                                (progn
+                                  (when (= 2 cnt-in-a-row)
+                                    (setf had-two-adjacents-once t))
+                                  1))
+
+                     for two-adjacents-digits = (= 2 cnt-in-a-row)
+
+                     when (= i (1- (length passwd)))
+                       return (or had-two-adjacents-once
+                                  two-adjacents-digits)))
+                 (progn
+                   (setf failing-reason :increasing-numbers)
+                   (let ((number-list (map 'list
+                                           (compose #'parse-integer #'string)
+                                           passwd)))
+                     (loop
+                       for last-c = nil then c
+                       for c in number-list
+                       for has-decreased = (or (and (not (null last-c))
+                                                    (> last-c c))
+                                               has-decreased)
+                       finally (return (not has-decreased))))))
+            (values nil failing-reason))
+        (error 'passwd-is-not-a-string-error
+               :text "The passwd argument must be a string."))))
+
+(defmacro test-password-ok (str expected)
+  `(multiple-value-bind (pok reason) (password-ok ,str)
+     (format t "~&~a ~a ~a"
+             ,str
+             (or (and (eql ,expected pok)
+                      "--")
+                 "KO")
+             reason)))
+
+(defun dec4-part1 ()
+  (loop for i from 240920 upto 789857
+        count (password-ok (format nil "~d" i))))
+
+(defun dec4-part2 ()
+  (test-password-ok "111122" t)
+  (test-password-ok "112233" t)
+  (test-password-ok "123444" nil)
+  (test-password-ok "123449" t)
+  (test-password-ok "111111" nil)
+  (test-password-ok "223450" nil)
+  (test-password-ok "123789" nil)
+  (dec4-part1))
 
