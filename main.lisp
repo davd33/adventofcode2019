@@ -9,18 +9,57 @@
 
 ;; DECEMBER 2ND - PART 1
 
+(defun read-program-instruction (instruction)
+  "Reads the instruction for int-code programs.
+   The instruction is an integer as described at https://adventofcode.com/2019/day/5"
+  (let* ((instruction (format nil "~5,'0d" instruction))
+         (args (subseq instruction 0 3))
+         (op (subseq instruction 3 5)))
+    (destructuring-bind (A B C) (map 'list
+                                     (compose #'parse-integer #'string)
+                                     args)
+      (values A B C (parse-integer op)))))
+
+(defun get-argv (program argmode arg)
+  "Get value of program argument."
+  (if (= 1 argmode)
+      arg
+      (when arg (nth arg program))))
+
+(defmacro instruction-bind (program index &body body)
+  "Binds arguments, op-code and values variables to the
+   current program's instruction."
+  `(multiple-value-bind (arg1m arg2m arg3m op)
+       (read-program-instruction (nth index program))
+     ;; operations 3 and 4 have only one argument whereas 1 and 2 have 3
+     (let ((op-n-args (if (find op '(3 4)) 1 3)))
+       ())))
+
 (defun int-code-computer (program)
-  (loop for i below (length program) by 4
-        when (not (= 99 (nth i program)))
-          do (let* ((pos0 (nth i program))
-                    (pos1 (nth (1+ i) program))
-                    (pos2 (nth (+ 2 i) program))
-                    (storepos (nth (+ 3 i) program))
-                    (pos1val (when pos1 (nth pos1 program)))
-                    (pos2val (when pos2 (nth pos2 program))))
-               (cond ((= pos0 1) (setf (nth storepos program) (+ pos1val pos2val)))
-                     ((= pos0 2) (setf (nth storepos program) (* pos1val pos2val)))
-                     (t (return)))))
+  (loop with cursor-step = 4
+
+        for i below (length program) by cursor-step
+
+        do (multiple-value-bind (arg1m arg2m arg3m op)
+               (read-program-instruction (nth i program))
+
+             (let* ((arg1 (nth (1+ i) program))
+                    (arg2 (nth (+ 2 i) program))
+                    (arg3 (nth (+ 3 i) program))
+                    (storepos (get-argv program arg3m arg3))
+                    (pos1val (get-argv program arg1m arg1))
+                    (pos2val (get-argv program arg2m arg2)))
+
+               (cond ((= op 1) (progn
+                                 (setf cursor-step 4)
+                                 (setf storepos (+ pos1val pos2val))))
+                     ((= op 2) (progn
+                                 (setf cursor-step 4)
+                                 (setf storepos (* pos1val pos2val))))
+                     ((= op 3) (progn
+                                 (setf cursor-step 2)
+                                 (setf )))
+                     (t (return))))))
   program)
 
 (defun dec2-part1 ()
@@ -281,3 +320,9 @@
   (test-password-ok "123789" nil)
   (dec4-part1))
 
+;; DEC 5 - PART 1
+
+(defun dec5-part1 ()
+  (with-open-file (input "./dec5.input")
+    (let ((code-to-be-run (read input)))
+      (int-code-computer code-to-be-run))))
