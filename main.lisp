@@ -319,7 +319,7 @@
     (destructuring-bind (C B A) (map 'list
                                      (compose #'parse-integer #'string)
                                      args)
-      (values A B C (parse-integer op)))))
+      (values (parse-integer op) A B C))))
 
 (defun get-argv (program argmode arg)
   "Get value of program argument."
@@ -327,45 +327,35 @@
       arg
       (when arg (nth arg program))))
 
-(defmacro instruction-bind (program index &optional fast-forward &body body)
-  "Binds arguments, op-code and values variables to the
-   current program's instruction.
-   Following variables are made available:
-     - a1m, a2m, a3m: the mode of an argument,
-     - a1v, a2v, a3v: the value of an argument,
-     - op: the operation code."
-  `(multiple-value-bind (a1m a2m a3m op)
-       (read-program-instruction (nth ,index ,program))
-
-     ;; operations 3 and 4 have only one argument whereas 1 and 2 have 3
-     (let* ((n-args (cond ((find op '(3 4)) 1)
-                          ((find op '(1 2)) 3)
-                          (t 0)))
-            (a1v (when (>= n-args 1)
-                   (get-argv ,program a1m (nth (1+ ,index) ,program))))
-            (a2v (when (>= n-args 2)
-                   (get-argv ,program a2m (nth (+ 2 ,index) ,program))))
-            (a3v (when (>= n-args 3)
-                   (get-argv ,program a3m (nth (+ 3 ,index) ,program)))))
-
-       (when ,fast-forward (setf ,fast-forward (+ 1 ,index n-args)))
-       ,@body)))
-
-(defun int-code-computer-upgraded (program input-value)
+(defun int-code-computer-upgraded (program input-value &key debug)
   (loop
     with i = 0
 
-    do (progn
-         (instruction-bind program i i
-           (cond ((= op 1) (progn
-                             (format t "~&~A + ~A = ~A -> ~A" a1v a2v (+ a1v a2v) a3v)
-                             (setf a3v (+ a1v a2v))))
-                 ((= op 2) (progn
-                             (format t "~&~A + ~A = ~A -> ~A" a1v a2v (+ a1v a2v) a3v)
-                             (setf a3v (* a1v a2v))))
-                 ((= op 3) (progn
-                             (format t "~&~A -> ~A @ ~A" a1v (nth a1v program) i)
-                             (setf a1v input-value)))
+    do (multiple-value-bind (op a1m a2m a3m)
+           (read-program-instruction (nth i program))
+
+         ;; operations 3 and 4 have only one argument whereas 1 and 2 have 3
+         (let* ((n-args (cond ((find op '(3 4)) 1)
+                              ((find op '(1 2)) 3)
+                              (t 0)))
+                (a1v (when (>= n-args 1)
+                       (if (= 3 op)
+                           (nth (1+ i) program)
+                           (get-argv program a1m (nth (1+ i) program)))))
+                (a2v (when (>= n-args 2)
+                       (get-argv program a2m (nth (+ 2 i) program))))
+                (a3v (when (>= n-args 3)
+                       (nth (+ 3 i) program))))
+
+           (setf i (+ 1 i n-args))
+
+           (when debug
+             (format t "~&~A / ~A:~A / ~A:~A / ~A:~A~&"
+                     op a1m a1v a2m a2v a3m a3v))
+
+           (cond ((= op 1) (setf (nth a3v program) (+ a1v a2v)))
+                 ((= op 2) (setf (nth a3v program) (* a1v a2v)))
+                 ((= op 3) (setf (nth a1v program) input-value))
                  ((= op 4) (format t "~&OUTPUT ~d" a1v))
                  ((= op 99) (return)))))))
 
